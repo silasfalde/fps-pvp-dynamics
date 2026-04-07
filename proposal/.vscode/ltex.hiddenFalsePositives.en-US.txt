@@ -1,0 +1,1 @@
+{"rule":"THE_SUPERLATIVE","sentence":"^\\QThe parameter sweeps of highest interest are those tied directly to map, team, and weapon balance.\\E$"}

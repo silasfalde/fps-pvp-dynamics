@@ -1,0 +1,21 @@
+digraph TimestepFlowchart {
+    rankdir=TB;
+    graph [bgcolor=transparent];
+    
+    start [label="Start Tick", shape=circle, style=filled, fillcolor=white, color=black];
+    sense [label="Agent Sensing", shape=box, style=filled, fillcolor=white, color=black];
+    decide [label="Decision Making", shape=box, style=filled, fillcolor=white, color=black];
+    move [label="Movement", shape=box, style=filled, fillcolor=white, color=black];
+    engage [label="Combat Resolution", shape=box, style=filled, fillcolor=white, color=black];
+    adapt [label="Adapt Strategy", shape=box, style=filled, fillcolor=white, color=black];
+    assess [label="Update Metrics", shape=box, style=filled, fillcolor=white, color=black];
+    end [label="End Tick", shape=circle, style=filled, fillcolor=white, color=black];
+    
+    start -> sense;
+    sense -> decide;
+    decide -> move;
+    move -> engage;
+    engage -> adapt;
+    adapt -> assess;
+    assess -> end;
+}

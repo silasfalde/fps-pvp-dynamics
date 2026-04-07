@@ -1,0 +1,16 @@
+digraph ModelDiagram {
+    rankdir=TB;
+    graph [bgcolor=transparent];
+    
+    game [label="Game Environment", shape=box, style=filled, fillcolor=white, color=black];
+    map [label="Grid-Based Map", shape=box, style=filled, fillcolor=white, color=black];
+    players [label="Player Agents", shape=box, style=filled, fillcolor=white, color=black];
+    weapons [label="Weapons/Abilities", shape=box, style=filled, fillcolor=white, color=black];
+    objectives [label="Objectives", shape=box, style=filled, fillcolor=white, color=black];
+    
+    game -> map;
+    map -> players;
+    weapons -> players;
+    objectives -> players;
+    players -> map [dir=both];
+}
