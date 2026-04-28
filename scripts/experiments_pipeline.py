@@ -6,10 +6,10 @@ Usage:
 Outputs:
     - out/samples/*.json (per-sample traces)
     - out/samples/metrics_*.csv (per-sample metrics)
-    - out/analysis/lhs_samples_*.png
+    - out/analysis/lhs_uniformity.json (Kolmogorov-Smirnov uniformity statistics)
     - out/analysis/sobol_indices.png
     - out/analysis/sobol_results.json
-    - out/experiments/parameter_sweeps.csv (summary)
+    - out/experiments/lhs_summary.csv (LHS run results)
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ import csv
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -176,16 +177,20 @@ def run_lhs_and_save(n_samples: int = 100, n_workers: int = None, seed_base: int
 
     export_lhs_plot_csvs(samples, param_names)
 
-    # Plot each marginal separately so different parameter ranges remain readable.
-    for j, name in enumerate(param_names[:3]):
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.hist(samples[:, j], bins=20, color="#4C78A8", alpha=0.85, edgecolor="white")
-        ax.set_title(f"LHS marginal distribution: {name}")
-        ax.set_xlabel(name)
-        ax.set_ylabel("Sample count")
-        fig.tight_layout()
-        fig.savefig(OUT_ANALYSIS / f"lhs_samples_{name}.png", dpi=150)
-        plt.close(fig)
+    # Compute uniformity statistics for each parameter using Kolmogorov-Smirnov test
+    # KS statistic measures how well samples match uniform distribution (0 = perfect uniform, 1 = no overlap)
+    uniformity_stats = {}
+    for j, name in enumerate(param_names):
+        lo, hi = PARAMETERS[name]
+        # Normalize samples to [0, 1]
+        normalized = (samples[:, j] - lo) / (hi - lo)
+        ks_stat, ks_pval = stats.ks_1samp(normalized, stats.uniform.cdf)
+        uniformity_stats[name] = {"ks_statistic": float(ks_stat), "ks_pvalue": float(ks_pval)}
+
+    # Write uniformity statistics
+    uniformity_json = OUT_ANALYSIS / "lhs_uniformity.json"
+    with uniformity_json.open("w", encoding="utf-8") as f:
+        json.dump(uniformity_stats, f, indent=2)
 
     return out_csv
 
@@ -240,14 +245,14 @@ def run_sobol_analysis(base_N: int = 64, n_workers: int = None, seed_base: int =
 
 def main() -> None:
     start = time.time()
-    print("Running LHS samples (n=256)...")
-    lhs_csv = run_lhs_and_save(n_samples=256)
+    print("Running LHS samples (n=1024)...")
+    lhs_csv = run_lhs_and_save(n_samples=1024)
     print(f"LHS summary: {lhs_csv}")
 
     # Run Sobol analysis with larger base_N
     try:
-        print("Running Sobol analysis (base_N=64)...")
-        sobol_json = run_sobol_analysis(base_N=64)
+        print("Running Sobol analysis (base_N=128)...")
+        sobol_json = run_sobol_analysis(base_N=128)
         print(f"Sobol results: {sobol_json}")
     except RuntimeError as e:
         print("Skipping Sobol analysis:", e)

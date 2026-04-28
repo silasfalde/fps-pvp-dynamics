@@ -1,0 +1,1 @@
+{"ticks": 200.0, "objective_progress": 0.0, "objective_controller": 0.0, "max_ticks": 200, "n_agents": 30, "seed": 1749, "objective_radius": 5, "wall_prob": 0.012977163668712904, "cover_prob": 0.19077235579839633, "choke_prob": 0.026440891097132987, "stochasticity": 0.29068741096242307, "adaptation_rate": 0.05671483503730364, "weapon_cooldown_ticks": 3}

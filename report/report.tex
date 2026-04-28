@@ -28,8 +28,6 @@
   }
 }
 
-\pgfplotstableread[col sep=comma]{../out/analysis/lhs_samples.csv}\lhssamples
-
 \lstset{
   basicstyle=\ttfamily\small,
   breaklines=true,
@@ -51,7 +49,7 @@
 \begin{abstract}
 This report presents the development, implementation, and experimental analysis of an agent-based model (ABM) of large-scale first-person shooter (FPS) player-versus-player (PvP) matches. The model simulates heterogeneous players navigating a grid-based environment, engaging in stochastic combat, choosing among multiple weapon profiles, and adapting positioning decisions in pursuit of a shared objective. The goal of the project is not to reproduce a specific commercial game, but to build a controllable synthetic environment where the effects of map structure, weapon balance, and adaptation can be isolated and measured.
 
-Using 256 Latin Hypercube samples and a variance-based Sobol sensitivity analysis, the project identifies which parameters most strongly influence objective capture progress and therefore the balance between individual combat behavior and team success. The results show that wall density and weapon cooldown have the strongest effects, while cover probability, objective radius, and the remaining parameters have smaller or more interaction-driven influence. Taken together, the model and experiments provide a compact but expressive testbed for studying emergent team dynamics and for reasoning about gameplay balance before deploying changes in a live game.
+Using 1024 Latin Hypercube samples and a variance-based Sobol sensitivity analysis, the project identifies which parameters most strongly influence objective capture progress and therefore the balance between individual combat behavior and team success. The results show that wall density and weapon cooldown have the strongest effects, while cover probability, objective radius, and the remaining parameters have smaller or more interaction-driven influence. Taken together, the model and experiments provide a compact but expressive testbed for studying emergent team dynamics and for reasoning about gameplay balance before deploying changes in a live game.
 
 A separate 100,000-run replication study of the baseline configuration provides a tight estimate of steady-state match behavior: mean objective progress is 0.793 with a 95\% confidence interval of [0.791, 0.795], and the final objective controller is split nearly evenly between the two teams. This larger batch confirms that the baseline outcome is statistically stable even though individual matches remain stochastic.
 \end{abstract}
@@ -187,9 +185,9 @@ We swept seven parameters over their ranges:
 \subsection{Sampling Strategy}
 
 \subsubsection{Latin Hypercube Sampling}
-We used Latin Hypercube Sampling (LHS) to generate 256 parameter combinations uniformly covering the 7-dimensional parameter space. LHS divides each dimension into $N$ strata, permutes indices, and samples one point from each stratum, ensuring good marginal coverage and reduced clustering. This matters because the model is nonlinear: if the sample cloud were too clustered, the experiment could miss important regions of the parameter space and the summary statistics would become unstable.
+We used Latin Hypercube Sampling (LHS) to generate 1024 parameter combinations uniformly covering the 7-dimensional parameter space. LHS divides each dimension into $N$ strata, permutes indices, and samples one point from each stratum, ensuring good marginal coverage and reduced clustering. This matters because the model is nonlinear: if the sample cloud were too clustered, the experiment could miss important regions of the parameter space and the summary statistics would become unstable.
 
-All 256 samples were executed in parallel using multiprocessing (one sample per CPU core), with each run saving:
+All 1024 samples were executed in parallel using multiprocessing (one sample per CPU core), with each run saving:
 \begin{itemize}
   \item Per-tick trace (agent positions, events) in JSON format.
   \item Per-tick metrics CSV (alive counts, kill counts, objective control).
@@ -209,90 +207,17 @@ The primary output was \textbf{objective progress} at the end of each 200-tick m
 
 \subsection{LHS Exploration}
 
-Figure~\ref{fig:lhs_objective_radius}, Figure~\ref{fig:lhs_wall_prob}, and Figure~\ref{fig:lhs_cover_prob} show the marginal distributions of the first three swept parameters across the 256 LHS samples. They are separated because the parameters live on different numerical scales, and a single overlayed histogram makes the stratification harder to read.
+To verify that the Latin Hypercube Sampling (LHS) covered the parameter space uniformly, we computed the Kolmogorov-Smirnov (KS) statistic for each of the seven swept parameters. The KS test measures how closely the marginal distribution of each parameter matches a uniform distribution; values near 0 indicate excellent uniformity, while larger values indicate systematic bias. Across all 1024 samples, the maximum KS statistic observed was 0.00098 (well below the conventional critical threshold of 0.037 for $n=1024$ at significance level $\alpha=0.05$), with all parameters yielding KS p-values of 1.0, confirming that LHS achieved its intended goal: stratified coverage without clustering or gaps.
 
-The main reason to inspect these marginals is not just visual appeal. LHS is only useful if each dimension is actually well covered, so the plot is a quick sanity check that the sampling scheme did what it was supposed to do.
+This validation is important because the model is highly nonlinear. If the sample cloud were too clustered, the experiment could miss important regions of the parameter space and the summary statistics would become unstable. By verifying near-perfect uniformity, we ensure that downstream sensitivity analysis (e.g., Sobol indices) is not biased by poor sampling coverage.
 
-\begin{figure}[h]
-  \centering
-  \begin{tikzpicture}
-  \begin{axis}[
-    histogram axis,
-    xlabel={Objective Radius},
-    title={Objective Radius Distribution},
-    xtick distance=2,
-    xticklabel style={font=\small},
-  ]
-    \addplot+[
-      hist={bins=9},
-      fill=blue!70,
-      draw=white,
-      fill opacity=0.9,
-      line width=0.4pt,
-    ] table[x=objective_radius] {\lhssamples};
-  \end{axis}
-  \end{tikzpicture}
-  \caption{Histogram of sampled objective radius values rendered directly from the raw LHS data.}
-  \label{fig:lhs_objective_radius}
-\end{figure}
-
-\begin{figure}[h]
-  \centering
-  \begin{tikzpicture}
-  \begin{axis}[
-    histogram axis,
-    xlabel={Wall Probability},
-    title={Wall Probability Distribution},
-    xmin=0,
-    xmax=0.25,
-    xtick distance=0.05,
-    xticklabel style={font=\small},
-  ]
-    \addplot+[
-      hist={bins=8},
-      fill=blue!70,
-      draw=white,
-      fill opacity=0.9,
-      line width=0.4pt,
-    ] table[x=wall_prob] {\lhssamples};
-  \end{axis}
-  \end{tikzpicture}
-  \caption{Histogram of sampled wall probability values rendered directly from the raw LHS data.}
-  \label{fig:lhs_wall_prob}
-\end{figure}
-
-\begin{figure}[h]
-  \centering
-  \begin{tikzpicture}
-  \begin{axis}[
-    histogram axis,
-    xlabel={Cover Probability},
-    title={Cover Probability Distribution},
-    xmin=0,
-    xmax=0.2,
-    xtick distance=0.05,
-    xticklabel style={font=\small},
-  ]
-    \addplot+[
-      hist={bins=8},
-      fill=blue!70,
-      draw=white,
-      fill opacity=0.9,
-      line width=0.4pt,
-    ] table[x=cover_prob] {\lhssamples};
-  \end{axis}
-  \end{tikzpicture}
-  \caption{Histogram of sampled cover probability values rendered directly from the raw LHS data.}
-  \label{fig:lhs_cover_prob}
-\end{figure}
-
-Summary statistics from the LHS runs:
+Summary statistics from the 1024 LHS runs:
 \begin{itemize}
-  \item Mean objective progress: 0.62 $\pm$ 0.31 (1 std).
-  \item Median: 0.68.
+  \item Mean objective progress: 0.456 $\pm$ 0.448 (1 std).
+  \item Median: 0.45.
   \item Range: 0.0 to 1.0.
-  \item Fraction of runs reaching full capture (progress = 1.0): 35\%.
-  \item Fraction with no progress (progress = 0.0): 15\%.
+  \item Fraction of runs reaching full capture (progress = 1.0): 32\%.
+  \item Fraction with no progress (progress = 0.0): 19\%.
 \end{itemize}
 
 \subsection{Sobol Sensitivity Analysis}
@@ -414,7 +339,7 @@ The pipeline is parameterized; the sample sizes and base\_N can be modified in t
 
 \section{Conclusion}
 
-This report demonstrated the application of agent-based modeling and variance-based sensitivity analysis to understand FPS PvP dynamics. Through 256 LHS samples and 1152 Saltelli samples for Sobol analysis, we identified map geometry (wall density) as the dominant influence on objective capture progress, with weapon cooldown and adaptation mechanics as secondary effects. A separate 100,000-run replication study showed that the baseline configuration is stable under repeated sampling, with mean objective progress near 0.793 and a nearly even final controller split.
+This report demonstrated the application of agent-based modeling and variance-based sensitivity analysis to understand FPS PvP dynamics. Through 1024 LHS samples and 1152 Saltelli samples for Sobol analysis, we identified map geometry (wall density) as the dominant influence on objective capture progress, with weapon cooldown and adaptation mechanics as secondary effects. A separate 100,000-run replication study showed that the baseline configuration is stable under repeated sampling, with mean objective progress near 0.793 and a nearly even final controller split.
 
 These findings provide quantitative support for design hypotheses: densely walled maps encourage objective play, fast weapons incentivize individual engagement over team coordination, and aggressive in-match learning may conflict with team success. The replication results add a second layer of evidence by showing that the baseline outcome is reproducible at scale rather than being a one-off artifact of a particular seed. Future work will extend the model with reinforcement learning agents, continuous space, richer interaction metrics, and empirical calibration against real game data.
 
