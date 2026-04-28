@@ -1,30 +1,30 @@
 {
   "objective_radius": {
-    "ks_statistic": 0.0009762729105010984,
+    "ks_statistic": 0.0009765535502397338,
     "ks_pvalue": 1.0
   },
   "wall_prob": {
-    "ks_statistic": 0.0009763532369652106,
+    "ks_statistic": 0.0009755074070841863,
     "ks_pvalue": 1.0
   },
   "cover_prob": {
-    "ks_statistic": 0.0009760349621892317,
+    "ks_statistic": 0.0009764248572861067,
     "ks_pvalue": 1.0
   },
   "choke_prob": {
-    "ks_statistic": 0.0009762437900552867,
+    "ks_statistic": 0.0009761556043060005,
     "ks_pvalue": 1.0
   },
   "stochasticity": {
-    "ks_statistic": 0.0009750419515678244,
+    "ks_statistic": 0.000976376132594936,
     "ks_pvalue": 1.0
   },
   "adaptation_rate": {
-    "ks_statistic": 0.0009759771023182262,
+    "ks_statistic": 0.0009752778875627977,
     "ks_pvalue": 1.0
   },
   "weapon_cooldown_ticks": {
-    "ks_statistic": 0.0009758562560411299,
+    "ks_statistic": 0.0009763350168285889,
     "ks_pvalue": 1.0
   }
 }

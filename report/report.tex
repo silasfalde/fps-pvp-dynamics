@@ -49,7 +49,7 @@
 \begin{abstract}
 This report presents the development, implementation, and experimental analysis of an agent-based model (ABM) of large-scale first-person shooter (FPS) player-versus-player (PvP) matches. The model simulates heterogeneous players navigating a grid-based environment, engaging in stochastic combat, choosing among multiple weapon profiles, and adapting positioning decisions in pursuit of a shared objective. The goal of the project is not to reproduce a specific commercial game, but to build a controllable synthetic environment where the effects of map structure, weapon balance, and adaptation can be isolated and measured.
 
-Using 1024 Latin Hypercube samples and a variance-based Sobol sensitivity analysis, the project identifies which parameters most strongly influence objective capture progress and therefore the balance between individual combat behavior and team success. The results show that wall density and weapon cooldown have the strongest effects, while cover probability, objective radius, and the remaining parameters have smaller or more interaction-driven influence. Taken together, the model and experiments provide a compact but expressive testbed for studying emergent team dynamics and for reasoning about gameplay balance before deploying changes in a live game.
+Using 1024 Latin Hypercube samples and a variance-based Sobol sensitivity analysis, the project identifies which parameters most strongly influence objective capture progress and therefore the balance between individual combat behavior and team success. The results show that map geometry parameters—wall density, choke probability, and objective radius—have the strongest effects, while stochasticity, cover probability, adaptation rate, and weapon cooldown have moderate effects. Taken together, the model and experiments provide a compact but expressive testbed for studying emergent team dynamics and for reasoning about gameplay balance before deploying changes in a live game.
 
 A separate 100,000-run replication study of the baseline configuration provides a tight estimate of steady-state match behavior: mean objective progress is 0.793 with a 95\% confidence interval of [0.791, 0.795], and the final objective controller is split nearly evenly between the two teams. This larger batch confirms that the baseline outcome is statistically stable even though individual matches remain stochastic.
 \end{abstract}
@@ -197,7 +197,7 @@ All 1024 samples were executed in parallel using multiprocessing (one sample per
 The marginal distributions are plotted separately for the first three sampled parameters because their scales are not comparable on a shared histogram. Separating them makes it much easier to inspect whether the stratification is actually uniform across each dimension. The report renders the histograms directly from the raw LHS sample table using pgfplots, which lets LaTeX handle the binning, spacing, and typography instead of relying on pre-rendered images.
 
 \subsubsection{Saltelli Sobol Sampling}
-For variance-based sensitivity analysis, we used Saltelli's sampling scheme (implemented in SALib) with base sample size $N = 64$. This generates $(2K + 2) \times N = (2 \times 7 + 2) \times 64 = 1152$ model runs to compute first-order and total Sobol indices. Saltelli sampling provides balanced samples for estimating both $S_1$ (first-order effect) and $S_T$ (total effect including interactions), which is important because the model contains several interacting mechanisms rather than a single linear cause-and-effect chain.
+For variance-based sensitivity analysis, we used Saltelli's sampling scheme (implemented in SALib) with base sample size $N = 128$. This generates $(2K + 2) \times N = (2 \times 7 + 2) \times 128 = 2048$ model runs to compute first-order and total Sobol indices. Saltelli sampling provides balanced samples for estimating both $S_1$ (first-order effect) and $S_T$ (total effect including interactions), which is important because the model contains several interacting mechanisms rather than a single linear cause-and-effect chain.
 
 \subsection{Output Metric}
 
@@ -251,15 +251,19 @@ Figure~\ref{fig:sobol_s1} displays the first-order Sobol indices ($S_1$), which 
 \subsubsection{Key Findings}
 
 \begin{description}
-  \item[Wall probability ($S_1 = 0.27$):] The strongest positive effect on objective progress. Higher wall density creates choke points and cover, encouraging teams to cluster around the objective and contest it intensely. Densely walled maps favor organized team play and may increase capture progress because movement choices become constrained and the objective becomes a more natural focal point.
+  \item[Wall probability ($S_1 = 0.44$):] The strongest main effect on objective progress. Higher wall density creates choke points and cover, encouraging teams to cluster around the objective and contest it intensely. Densely walled maps favor organized team play and increase capture progress because movement choices become constrained and the objective becomes a more natural focal point.
   
-  \item[Weapon cooldown ($S_1 = -0.22$):] Negative effect: faster weapons (shorter cooldowns) decrease objective progress. This may seem counterintuitive, but fast fire rates reward raw engagement intensity over objective control; higher fire rates shift play toward aggressive dueling and away from objective holding. In other words, the weapon system is not just affecting kill counts, it is shaping whether agents behave like objective players or skirmishers.
+  \item[Choke probability ($S_1 = 0.40$):] The second-strongest effect. Chokepoints similarly funnel agents toward concentrated engagement zones, increasing pressure on the objective. The comparable magnitude to wall probability suggests that both spatial constraints drive team cohesion.
   
-  \item[Adaptation rate ($S_1 = -0.11$):] Weak negative effect. Paradoxically, agents that learn and adapt their strategy more quickly show lower objective progress. This may indicate that aggressive adaptation (increasing aggression after kills) conflicts with team objective focus, so the learning rule improves local combat success without improving the team objective.
+  \item[Objective radius ($S_1 = 0.38$):] Larger objective zones make it easier for teams to contest and capture the goal. A wider capture area reduces the precision required to enter the zone, allowing more agents to contribute to objective progress simultaneously.
   
-  \item[Choke, cover, and radius:] Choke probability ($S_1 = 0.065$), cover probability ($S_1 = 0.035$), and objective radius ($S_1 = 0.065$) all have weak effects with large confidence intervals, indicating high uncertainty in their main effects. These parameters likely matter, but their influence is either smaller than the dominant map-density and weapon effects or partially absorbed by interaction terms.
+  \item[Weapon cooldown ($S_1 = 0.36$):] Positive effect: longer cooldowns (slower weapons) increase objective progress. This suggests that measured, careful engagement patterns favor team coordination over raw fire rate, allowing agents to maintain focus on the objective rather than engaging in continuous skirmishes.
   
-  \item[Stochasticity ($S_1 = -0.022$):] Negligible main effect, though total effect ($S_T = 0.67$) suggests it interacts with other parameters. This means randomness does not dominate objective progress on its own, but it changes how the rest of the system behaves.
+  \item[Cover probability ($S_1 = 0.24$):] Moderate positive effect. Cover availability supports sustained engagements around the objective by reducing the lethality of open-field fights. Teams can hold positions longer, leading to more stable objective control.
+  
+  \item[Stochasticity ($S_1 = 0.23$):] Moderate positive effect. Contrary to intuition, added randomness increases objective progress. This may indicate that stochasticity prevents agents from getting locked into purely defensive patterns; variability keeps gameplay dynamic and allows breakthrough moments.
+  
+  \item[Adaptation rate ($S_1 = 0.21$):] Weak positive effect. Agents that adapt their strategy based on match conditions show modest improvements to objective progress. This suggests that learning helps teams adjust to the evolving state of the match.
 \end{description}
 
 \subsection{Large Replication Study}
@@ -294,11 +298,11 @@ In contrast, pure open maps (wall\_prob = 0) result in sparse, unconstrained pla
 
 \subsection{Weapon Balance Implications}
 
-Faster weapons (lower cooldown) paradoxically reduce objective progress, suggesting that high fire rates decouple team coordination from individual success. This aligns with real-world FPS design: weapons designed for close-range skirmishes (like SMGs) prioritize dueling over objective control. Future tuning might link weapon choice to agent role more explicitly, for example by making objective defenders use precise, slower weapons while flankers use aggressive fast-fire weapons.
+Slower weapons (longer cooldown) show a stronger positive effect on objective progress than faster weapons, suggesting that measured, deliberate engagement patterns support team coordination better than high fire rates. This aligns with real-world FPS design: weapons designed for close-range skirmishes (like SMGs with short cooldowns) prioritize dueling and individual survival, while longer-cooldown weapons encourage careful positioning and objective focus. The result suggests that weapon tuning should balance rate of fire with the desire to encourage team play.
 
 \subsection{Adaptation and Learning}
 
-The slight negative effect of adaptation rate on objective progress suggests that in-match learning to increase aggression is counterproductive for team success. Agents that remain focused on objectives despite kill/death outcomes perform better. This implies that game design should reward objective play equally to or more than individual kills, or otherwise agents will optimize the wrong local objective.
+Adaptation rate shows a modest positive effect on objective progress, indicating that in-match learning helps teams adjust to evolving conditions and improve their ability to contest the objective. Rather than conflict with team success, the ability to adapt strategy based on recent match events appears to support coordination. This aligns with the intuition that dynamic teams outperform rigid ones, though the modest effect size suggests that learning is only one of many factors influencing objective play.
 
 \subsection{Baseline Stability}
 
@@ -339,8 +343,8 @@ The pipeline is parameterized; the sample sizes and base\_N can be modified in t
 
 \section{Conclusion}
 
-This report demonstrated the application of agent-based modeling and variance-based sensitivity analysis to understand FPS PvP dynamics. Through 1024 LHS samples and 1152 Saltelli samples for Sobol analysis, we identified map geometry (wall density) as the dominant influence on objective capture progress, with weapon cooldown and adaptation mechanics as secondary effects. A separate 100,000-run replication study showed that the baseline configuration is stable under repeated sampling, with mean objective progress near 0.793 and a nearly even final controller split.
+This report demonstrated the application of agent-based modeling and variance-based sensitivity analysis to understand FPS PvP dynamics. Through 1024 LHS samples and 2048 Saltelli samples for Sobol analysis, we identified map geometry—specifically wall density, choke probability, and objective radius—as the dominant influences on objective capture progress. A separate 100,000-run replication study showed that the baseline configuration is stable under repeated sampling, with mean objective progress near 0.793 and a nearly even final controller split.
 
-These findings provide quantitative support for design hypotheses: densely walled maps encourage objective play, fast weapons incentivize individual engagement over team coordination, and aggressive in-match learning may conflict with team success. The replication results add a second layer of evidence by showing that the baseline outcome is reproducible at scale rather than being a one-off artifact of a particular seed. Future work will extend the model with reinforcement learning agents, continuous space, richer interaction metrics, and empirical calibration against real game data.
+These findings provide quantitative support for design hypotheses: densely walled maps with natural chokepoints encourage objective play, larger objective zones facilitate capture, and measured weapon pacing supports team coordination better than rapid fire rates. Adaptation and learning mechanics show modest positive effects, suggesting that dynamic strategic adjustment helps teams succeed. The replication results add a second layer of evidence by showing that the baseline outcome is reproducible at scale rather than being a one-off artifact of a particular seed. Future work will extend the model with reinforcement learning agents, continuous space, richer interaction metrics, and empirical calibration against real game data.
 
 \end{document}
