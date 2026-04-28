@@ -1,0 +1,22 @@
+{
+  "samples": 100000,
+  "ticks_mean": 200.0,
+  "ticks_stddev": 0.0,
+  "ticks_stderr": 0.0,
+  "ticks_ci95_low": 200.0,
+  "ticks_ci95_high": 200.0,
+  "objective_progress_mean": 0.7929751999999999,
+  "objective_progress_stddev": 0.31675640408862354,
+  "objective_progress_stderr": 0.001001671700364722,
+  "objective_progress_ci95_low": 0.791011959542952,
+  "objective_progress_ci95_high": 0.7949384404570478,
+  "objective_controller_mean": 0.48303,
+  "objective_controller_stddev": 0.4997144346976205,
+  "objective_controller_stderr": 0.0015802357933079557,
+  "objective_controller_ci95_low": 0.47993279475803535,
+  "objective_controller_ci95_high": 0.4861272052419647,
+  "max_ticks": 200,
+  "n_agents": 30,
+  "seed_base": 1000,
+  "workers": 15
+}

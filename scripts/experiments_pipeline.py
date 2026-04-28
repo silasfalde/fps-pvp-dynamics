@@ -6,7 +6,7 @@ Usage:
 Outputs:
     - out/samples/*.json (per-sample traces)
     - out/samples/metrics_*.csv (per-sample metrics)
-    - out/analysis/lhs_samples.png
+    - out/analysis/lhs_samples_*.png
     - out/analysis/sobol_indices.png
     - out/analysis/sobol_results.json
     - out/experiments/parameter_sweeps.csv (summary)
@@ -21,6 +21,7 @@ from pathlib import Path
 import sys
 import time
 from typing import Dict, List
+import csv
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -119,6 +120,39 @@ def worker_run(args):
     return summary
 
 
+def export_lhs_plot_csvs(samples: np.ndarray, param_names: List[str]) -> None:
+    for column_index, name in enumerate(param_names[:3]):
+        csv_name = f"lhs_{name}.csv"
+        bins = 10 if name in ("wall_prob", "cover_prob") else 20
+        counts, edges = np.histogram(samples[:, column_index], bins=bins)
+
+        csv_path = OUT_ANALYSIS / csv_name
+        with csv_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["edge", "count"])
+            for edge, count in zip(edges[:-1], counts):
+                writer.writerow([float(edge), int(count)])
+            writer.writerow([float(edges[-1]), 0])
+
+
+def export_sobol_plot_csv(sobol_result: dict) -> None:
+    labels = [
+        "Adaptation Rate",
+        "Choke Probability",
+        "Cover Probability",
+        "Objective Radius",
+        "Stochasticity",
+        "Wall Probability",
+        "Weapon Cooldown Ticks",
+    ]
+    csv_path = OUT_ANALYSIS / "sobol_indices.csv"
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["parameter", "s1", "s1_conf"])
+        for label, value, conf in zip(labels, sobol_result["S1"], sobol_result["S1_conf"]):
+            writer.writerow([label, float(value), float(conf)])
+
+
 def run_lhs_and_save(n_samples: int = 100, n_workers: int = None, seed_base: int = 1000):
     param_names = list(PARAMETERS.keys())
     samples = lhs_sampling(n_samples, PARAMETERS)
@@ -132,9 +166,6 @@ def run_lhs_and_save(n_samples: int = 100, n_workers: int = None, seed_base: int
     with mp.Pool(processes=n_workers) as pool:
         results = list(pool.imap_unordered(worker_run, args))
 
-    # save summary CSV
-    import csv
-
     keys = sorted(results[0].keys())
     out_csv = OUT_EXPERIMENTS / "lhs_summary.csv"
     with out_csv.open("w", encoding="utf-8", newline="") as handle:
@@ -143,13 +174,18 @@ def run_lhs_and_save(n_samples: int = 100, n_workers: int = None, seed_base: int
         for r in results:
             writer.writerow(r)
 
-    # plot sample marginal distributions for first two params
-    fig, ax = plt.subplots(figsize=(6, 4))
+    export_lhs_plot_csvs(samples, param_names)
+
+    # Plot each marginal separately so different parameter ranges remain readable.
     for j, name in enumerate(param_names[:3]):
-        ax.hist(samples[:, j], bins=20, alpha=0.6, label=name)
-    ax.legend()
-    ax.set_title("LHS sample marginals")
-    fig.savefig(OUT_ANALYSIS / "lhs_samples.png", dpi=150)
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.hist(samples[:, j], bins=20, color="#4C78A8", alpha=0.85, edgecolor="white")
+        ax.set_title(f"LHS marginal distribution: {name}")
+        ax.set_xlabel(name)
+        ax.set_ylabel("Sample count")
+        fig.tight_layout()
+        fig.savefig(OUT_ANALYSIS / f"lhs_samples_{name}.png", dpi=150)
+        plt.close(fig)
 
     return out_csv
 
@@ -185,10 +221,15 @@ def run_sobol_analysis(base_N: int = 64, n_workers: int = None, seed_base: int =
     with out_json.open("w", encoding="utf-8") as f:
         json.dump({k: v.tolist() if hasattr(v, "tolist") else v for k, v in Si.items()}, f)
 
+    export_sobol_plot_csv(Si)
+
     # plot first-order indices
     S1 = Si.get("S1")
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.bar(names, S1)
+    ax.tick_params(axis="x", labelrotation=45)
+    for label in ax.get_xticklabels():
+        label.set_ha("right")
     ax.set_ylabel("S1 (first-order Sobol index)")
     ax.set_title("Sobol sensitivity (objective_progress)")
     fig.tight_layout()

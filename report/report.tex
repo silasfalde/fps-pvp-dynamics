@@ -3,8 +3,32 @@
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{amsmath}
+\usepackage{pgfplots}
 \usepackage{listings}
 \usepackage{xcolor}
+\pgfplotsset{compat=1.18}
+\pgfplotsset{
+  histogram axis/.style={
+    width=0.92\textwidth,
+    height=5.8cm,
+    grid=both,
+    major grid style={draw=gray!20},
+    minor grid style={draw=gray!10},
+    minor tick num=1,
+    tick align=outside,
+    axis line style={draw=gray!55},
+    tick style={draw=gray!55},
+    ymin=0,
+    ymax=40,
+    ytick distance=10,
+    ylabel={Sample Count},
+    xlabel near ticks,
+    ylabel near ticks,
+    enlargelimits=0.02,
+  }
+}
+
+\pgfplotstableread[col sep=comma]{../out/analysis/lhs_samples.csv}\lhssamples
 
 \lstset{
   basicstyle=\ttfamily\small,
@@ -25,14 +49,18 @@
 \maketitle
 
 \begin{abstract}
-This report presents the development, implementation, and experimental analysis of an agent-based model (ABM) of large-scale first-person shooter (FPS) player-versus-player (PvP) matches. The model simulates heterogeneous players navigating a grid-based environment, engaging in stochastic combat, and adapting weapon and positioning strategies in pursuit of an objective. Through Latin Hypercube sampling of 256 parameter combinations and variance-based sensitivity analysis, we identify which parameters most significantly influence objective capture progress and team success. Results show that wall density and weapon cooldown have the strongest effects, while cover probability and objective radius have weaker but measurable influences. This analysis provides a foundation for balancing game mechanics and understanding emergent team-level dynamics.
+This report presents the development, implementation, and experimental analysis of an agent-based model (ABM) of large-scale first-person shooter (FPS) player-versus-player (PvP) matches. The model simulates heterogeneous players navigating a grid-based environment, engaging in stochastic combat, choosing among multiple weapon profiles, and adapting positioning decisions in pursuit of a shared objective. The goal of the project is not to reproduce a specific commercial game, but to build a controllable synthetic environment where the effects of map structure, weapon balance, and adaptation can be isolated and measured.
+
+Using 256 Latin Hypercube samples and a variance-based Sobol sensitivity analysis, the project identifies which parameters most strongly influence objective capture progress and therefore the balance between individual combat behavior and team success. The results show that wall density and weapon cooldown have the strongest effects, while cover probability, objective radius, and the remaining parameters have smaller or more interaction-driven influence. Taken together, the model and experiments provide a compact but expressive testbed for studying emergent team dynamics and for reasoning about gameplay balance before deploying changes in a live game.
+
+A separate 100,000-run replication study of the baseline configuration provides a tight estimate of steady-state match behavior: mean objective progress is 0.793 with a 95\% confidence interval of [0.791, 0.795], and the final objective controller is split nearly evenly between the two teams. This larger batch confirms that the baseline outcome is statistically stable even though individual matches remain stochastic.
 \end{abstract}
 
 \section{Introduction}
 
-FPS PvP games balance emerges from the complex interactions of individual player decisions with environmental constraints and game rules. An agent-based approach is appropriate for exploring this emergence, as macro-level patterns (fairness, engagement frequency, dominant strategies) arise from micro-level agent choices rather than explicit aggregate rules.
+FPS PvP game balance emerges from the complex interactions of individual player decisions, map constraints, and rule-based systems. An agent-based approach is appropriate for exploring this emergence because macro-level patterns such as fairness, engagement frequency, objective control, and dominant strategies arise from many local decisions rather than from any explicit aggregate rule.
 
-The primary goal of this project is to model these dynamics and use parameter sweeps and sensitivity analysis to identify which game design elements (map layout, weapon balance, objective mechanics) most strongly influence gameplay outcomes. This knowledge can inform balance decisions and help developers predict the effects of tuning changes before implementing them in live games.
+The primary goal of this project is to model these dynamics and use parameter sweeps and sensitivity analysis to identify which game design elements most strongly influence gameplay outcomes. In practice, this means asking questions such as how much of the match outcome is driven by map layout rather than weapon tuning, or whether local learning helps teams capture objectives or distracts them from the objective entirely. This kind of analysis can inform balance decisions and help developers predict the effects of tuning changes before implementing them in live games.
 
 \section{Model Description and Design}
 
@@ -41,17 +69,17 @@ The primary goal of this project is to model these dynamics and use parameter sw
 The model implements six key design concepts from the proposal:
 
 \begin{description}
-  \item[Emergence:] Team-level fairness and engagement patterns emerge from heterogeneous agent decisions about positioning, weapon selection, and engagement timing. No explicit rules enforce balanced outcomes.
+  \item[Emergence:] Team-level fairness and engagement patterns emerge from heterogeneous agent decisions about positioning, weapon selection, and engagement timing. No explicit rules enforce balanced outcomes, so the match state is determined by the accumulated effect of many local actions.
   
-  \item[Adaptation:] Agents modify behavior based on local information: visible enemies, map terrain, team objectives, and recent engagement outcomes. Weapon selection is adapted based on skill level (riflemen have high skill, SMG users are aggressive, DMR users are skilled marksmen).
+  \item[Adaptation:] Agents modify behavior based on local information: visible enemies, map terrain, team objectives, and recent engagement outcomes. Weapon selection is adapted based on skill level, with DMR users acting as higher-skill marksmen, SMG users acting as aggressive close-range fighters, and rifle users representing a balanced baseline.
   
-  \item[Objectives:] Individual agents pursue personal goals (eliminating enemies, surviving) while contributing to a team objective (capturing and holding a central point). This creates strategic tension between individual K/D ratios and team success.
+  \item[Objectives:] Individual agents pursue personal goals such as eliminating enemies and surviving while also contributing to a team objective centered on capturing and holding a central point. This creates strategic tension between individual K/D ratios and team success, which is exactly the tension the sensitivity analysis is meant to illuminate.
   
-  \item[Learning:] Agents update aggression based on recent kill/death ratios within a match, reinforcing successful strategies over time.
+  \item[Learning:] Agents update aggression based on recent kill/death ratios within a match, reinforcing successful strategies over time. This gives the model a simple in-match feedback loop without introducing a full reinforcement learning system.
   
-  \item[Heterogeneity:] Players have random skill levels (sampled uniformly from 0.2 to 0.95), aggression levels, and risk tolerance. These traits influence movement behavior, engagement decisions, and weapon adaptation.
+  \item[Heterogeneity:] Players have random skill levels (sampled uniformly from 0.2 to 0.95), aggression levels, and risk tolerance. These traits influence movement behavior, engagement decisions, and weapon adaptation, ensuring that the population is not homogeneous and that the same map can produce different match trajectories.
   
-  \item[Stochasticity:] Combat outcomes include randomness via skill-dependent hit probability and damage rolls, preventing deterministic play even from identical initial conditions.
+  \item[Stochasticity:] Combat outcomes include randomness via skill-dependent hit probability and damage rolls, preventing deterministic play even from identical initial conditions. This keeps the model from collapsing into a purely deterministic shortest-path problem and makes the output suitable for variance-based analysis.
 \end{description}
 
 \subsection{Model Structure}
@@ -63,7 +91,7 @@ The environment is a 40×30 grid representing an FPS arena. Each cell stores:
   \item \textbf{Dynamic state:} occupant IDs, objective progress, controlling team, and combat heat (recent engagement intensity).
 \end{itemize}
 
-Terrain is generated procedurally at the start of each match using wall, cover, and choke probabilities. The objective is a circular zone at the map center with a configurable radius. Non-wrapping boundaries enforce arena-like geometry.
+Terrain is generated procedurally at the start of each match using wall, cover, and choke probabilities. The objective is a circular zone at the map center with a configurable radius, which makes the model easy to interpret because every team starts from the same broad spatial relationship to the goal. Non-wrapping boundaries enforce arena-like geometry and prevent agents from escaping the play space.
 
 \subsubsection{Agents}
 Each agent maintains:
@@ -79,6 +107,8 @@ Agents use one of three weapons with distinct properties:
   \item SMG: lower damage/range but faster fire rate (shorter cooldown).
   \item DMR: higher damage and range but slower fire rate.
 \end{itemize}
+
+These weapon classes are intentionally simple. The purpose is to capture the broad gameplay tradeoff between rate of fire, range, and impact, not to model every mechanical detail of a specific FPS. That keeps the state space compact enough for sensitivity analysis while still allowing weapon balance to matter in the match outcome.
 
 \subsubsection{Tick Schedule}
 Each discrete time step follows a synchronous schedule:
@@ -102,6 +132,26 @@ Rather than random wandering, agents use a distance field to navigate toward the
 \end{itemize}
 
 This greedy pathfinding produces more realistic objective-oriented behavior than pure random movement.
+
+\subsubsection{Example Simulation Snapshots}
+
+The model also produces animated environment GIFs during simulation runs. To make the report easier to read, two representative still frames were extracted from those GIFs and included below. The first shows an early match state with initial spread, while the second shows a later state where movement and objective pressure have already begun to shape the spatial structure of the match.
+
+\begin{figure}[h]
+  \centering
+  \begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{../out/analysis/match_1_frame.png}
+    \caption*{Early-match snapshot from an environment GIF.}
+  \end{minipage}\hfill
+  \begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{../out/analysis/match_5_frame.png}
+    \caption*{Mid-match snapshot from an environment GIF.}
+  \end{minipage}
+  \caption{Still frames extracted from the generated environment GIFs. The images show how agent motion, map structure, and objective pressure shape the evolving match state.}
+  \label{fig:environment_snapshots}
+\end{figure}
 
 \subsection{Combat Resolution}
 
@@ -137,7 +187,7 @@ We swept seven parameters over their ranges:
 \subsection{Sampling Strategy}
 
 \subsubsection{Latin Hypercube Sampling}
-We used Latin Hypercube Sampling (LHS) to generate 256 parameter combinations uniformly covering the 7-dimensional parameter space. LHS divides each dimension into $N$ strata, permutes indices, and samples one point from each stratum, ensuring good marginal coverage and reduced clustering.
+We used Latin Hypercube Sampling (LHS) to generate 256 parameter combinations uniformly covering the 7-dimensional parameter space. LHS divides each dimension into $N$ strata, permutes indices, and samples one point from each stratum, ensuring good marginal coverage and reduced clustering. This matters because the model is nonlinear: if the sample cloud were too clustered, the experiment could miss important regions of the parameter space and the summary statistics would become unstable.
 
 All 256 samples were executed in parallel using multiprocessing (one sample per CPU core), with each run saving:
 \begin{itemize}
@@ -146,24 +196,94 @@ All 256 samples were executed in parallel using multiprocessing (one sample per 
   \item Summary JSON with final objective progress, objective controller, and all parameter values.
 \end{itemize}
 
+The marginal distributions are plotted separately for the first three sampled parameters because their scales are not comparable on a shared histogram. Separating them makes it much easier to inspect whether the stratification is actually uniform across each dimension. The report renders the histograms directly from the raw LHS sample table using pgfplots, which lets LaTeX handle the binning, spacing, and typography instead of relying on pre-rendered images.
+
 \subsubsection{Saltelli Sobol Sampling}
-For variance-based sensitivity analysis, we used Saltelli's sampling scheme (implemented in SALib) with base sample size $N = 64$. This generates $(2K + 2) \times N = (2 \times 7 + 2) \times 64 = 1152$ model runs to compute first-order and total Sobol indices. Saltelli sampling provides balanced samples for estimating both $S_1$ (first-order effect) and $S_T$ (total effect including interactions).
+For variance-based sensitivity analysis, we used Saltelli's sampling scheme (implemented in SALib) with base sample size $N = 64$. This generates $(2K + 2) \times N = (2 \times 7 + 2) \times 64 = 1152$ model runs to compute first-order and total Sobol indices. Saltelli sampling provides balanced samples for estimating both $S_1$ (first-order effect) and $S_T$ (total effect including interactions), which is important because the model contains several interacting mechanisms rather than a single linear cause-and-effect chain.
 
 \subsection{Output Metric}
 
-The primary output was \textbf{objective progress} at the end of each 200-tick match. This represents the cumulative capture progress by the team controlling the objective, ranging from 0 to 1. A value of 1 indicates complete capture; 0 indicates no progress or contested/lost control.
+The primary output was \textbf{objective progress} at the end of each 200-tick match. This represents the cumulative capture progress by the team controlling the objective, ranging from 0 to 1. A value of 1 indicates complete capture; 0 indicates no progress or contested/lost control. We focus on this metric because it directly measures whether the model is producing coordinated team play rather than just isolated combat.
 
 \section{Results}
 
 \subsection{LHS Exploration}
 
-Figure~\ref{fig:lhs_marginals} shows the marginal distributions of the first three swept parameters across the 256 LHS samples, confirming even stratification.
+Figure~\ref{fig:lhs_objective_radius}, Figure~\ref{fig:lhs_wall_prob}, and Figure~\ref{fig:lhs_cover_prob} show the marginal distributions of the first three swept parameters across the 256 LHS samples. They are separated because the parameters live on different numerical scales, and a single overlayed histogram makes the stratification harder to read.
+
+The main reason to inspect these marginals is not just visual appeal. LHS is only useful if each dimension is actually well covered, so the plot is a quick sanity check that the sampling scheme did what it was supposed to do.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\textwidth]{../out/analysis/lhs_samples.png}
-  \caption{Marginal distributions of Latin Hypercube samples. Each parameter is evenly distributed across its range, demonstrating uniform coverage of the parameter space.}
-  \label{fig:lhs_marginals}
+  \begin{tikzpicture}
+  \begin{axis}[
+    histogram axis,
+    xlabel={Objective Radius},
+    title={Objective Radius Distribution},
+    xtick distance=2,
+    xticklabel style={font=\small},
+  ]
+    \addplot+[
+      hist={bins=9},
+      fill=blue!70,
+      draw=white,
+      fill opacity=0.9,
+      line width=0.4pt,
+    ] table[x=objective_radius] {\lhssamples};
+  \end{axis}
+  \end{tikzpicture}
+  \caption{Histogram of sampled objective radius values rendered directly from the raw LHS data.}
+  \label{fig:lhs_objective_radius}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+  \begin{axis}[
+    histogram axis,
+    xlabel={Wall Probability},
+    title={Wall Probability Distribution},
+    xmin=0,
+    xmax=0.25,
+    xtick distance=0.05,
+    xticklabel style={font=\small},
+  ]
+    \addplot+[
+      hist={bins=8},
+      fill=blue!70,
+      draw=white,
+      fill opacity=0.9,
+      line width=0.4pt,
+    ] table[x=wall_prob] {\lhssamples};
+  \end{axis}
+  \end{tikzpicture}
+  \caption{Histogram of sampled wall probability values rendered directly from the raw LHS data.}
+  \label{fig:lhs_wall_prob}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+  \begin{axis}[
+    histogram axis,
+    xlabel={Cover Probability},
+    title={Cover Probability Distribution},
+    xmin=0,
+    xmax=0.2,
+    xtick distance=0.05,
+    xticklabel style={font=\small},
+  ]
+    \addplot+[
+      hist={bins=8},
+      fill=blue!70,
+      draw=white,
+      fill opacity=0.9,
+      line width=0.4pt,
+    ] table[x=cover_prob] {\lhssamples};
+  \end{axis}
+  \end{tikzpicture}
+  \caption{Histogram of sampled cover probability values rendered directly from the raw LHS data.}
+  \label{fig:lhs_cover_prob}
 \end{figure}
 
 Summary statistics from the LHS runs:
@@ -177,11 +297,28 @@ Summary statistics from the LHS runs:
 
 \subsection{Sobol Sensitivity Analysis}
 
-Figure~\ref{fig:sobol_s1} displays the first-order Sobol indices ($S_1$), which measure the main effect of each parameter on objective progress variance.
+Figure~\ref{fig:sobol_s1} displays the first-order Sobol indices ($S_1$), which measure the main effect of each parameter on objective progress variance. In this context, a large positive index means that changing the parameter alone explains a meaningful portion of the observed variation in objective progress. Small or slightly negative estimates should be interpreted as near-zero main effects with sampling noise, not as literal negative contributions to variance.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\textwidth]{../out/analysis/sobol_indices.png}
+  \begin{tikzpicture}
+  \begin{axis}[
+    ybar,
+    width=0.9\textwidth,
+    height=6.5cm,
+    grid=major,
+    bar width=11pt,
+    enlarge x limits=0.08,
+    symbolic x coords={Adaptation Rate,Choke Probability,Cover Probability,Objective Radius,Stochasticity,Wall Probability,Weapon Cooldown Ticks},
+    xtick=data,
+    xticklabel style={rotate=35, anchor=east},
+    ylabel={First-Order Sobol Index},
+    title={First-Order Sobol Sensitivity for Objective Progress},
+    % ymin=-0.45,
+  ]
+    \addplot+[fill=blue!70, draw=blue!90, error bars/.cd, y dir=both, y explicit] table [x=parameter, y=s1, y error=s1_conf, col sep=comma] {../out/analysis/sobol_indices.csv};
+  \end{axis}
+  \end{tikzpicture}
   \caption{First-order Sobol indices for objective progress. Positive values indicate parameters that increase progress; negative values indicate those that decrease it. Larger magnitudes reflect stronger main effects.}
   \label{fig:sobol_s1}
 \end{figure}
@@ -189,32 +326,58 @@ Figure~\ref{fig:sobol_s1} displays the first-order Sobol indices ($S_1$), which 
 \subsubsection{Key Findings}
 
 \begin{description}
-  \item[Wall probability ($S_1 = 0.27$):] The strongest positive effect on objective progress. Higher wall density creates choke points and cover, encouraging teams to cluster around the objective and contest it intensely. Densely walled maps favor organized team play and may increase capture progress.
+  \item[Wall probability ($S_1 = 0.27$):] The strongest positive effect on objective progress. Higher wall density creates choke points and cover, encouraging teams to cluster around the objective and contest it intensely. Densely walled maps favor organized team play and may increase capture progress because movement choices become constrained and the objective becomes a more natural focal point.
   
-  \item[Weapon cooldown ($S_1 = -0.22$):] Negative effect: faster weapons (shorter cooldowns) decrease objective progress. This may seem counterintuitive, but fast fire rates reward raw engagement intensity over objective control; higher fire rates shift play toward aggressive dueling and away from objective holding.
+  \item[Weapon cooldown ($S_1 = -0.22$):] Negative effect: faster weapons (shorter cooldowns) decrease objective progress. This may seem counterintuitive, but fast fire rates reward raw engagement intensity over objective control; higher fire rates shift play toward aggressive dueling and away from objective holding. In other words, the weapon system is not just affecting kill counts, it is shaping whether agents behave like objective players or skirmishers.
   
-  \item[Adaptation rate ($S_1 = -0.11$):] Weak negative effect. Paradoxically, agents that learn and adapt their strategy more quickly show lower objective progress. This may indicate that aggressive adaptation (increasing aggression after kills) conflicts with team objective focus.
+  \item[Adaptation rate ($S_1 = -0.11$):] Weak negative effect. Paradoxically, agents that learn and adapt their strategy more quickly show lower objective progress. This may indicate that aggressive adaptation (increasing aggression after kills) conflicts with team objective focus, so the learning rule improves local combat success without improving the team objective.
   
-  \item[Choke probability ($S_1 = 0.065$), Cover probability ($S_1 = 0.035$), Objective radius ($S_1 = 0.065$):] Weak effects with large confidence intervals, indicating high uncertainty in their main effects.
+  \item[Choke, cover, and radius:] Choke probability ($S_1 = 0.065$), cover probability ($S_1 = 0.035$), and objective radius ($S_1 = 0.065$) all have weak effects with large confidence intervals, indicating high uncertainty in their main effects. These parameters likely matter, but their influence is either smaller than the dominant map-density and weapon effects or partially absorbed by interaction terms.
   
-  \item[Stochasticity ($S_1 = -0.022$):] Negligible main effect, though total effect ($S_T = 0.67$) suggests it interacts with other parameters.
+  \item[Stochasticity ($S_1 = -0.022$):] Negligible main effect, though total effect ($S_T = 0.67$) suggests it interacts with other parameters. This means randomness does not dominate objective progress on its own, but it changes how the rest of the system behaves.
 \end{description}
+
+\subsection{Large Replication Study}
+
+To check how stable the baseline configuration is under repeated random seeds, we ran 100,000 independent matches with the default 200-tick setup and distinct seeds. Unlike the LHS and Sobol studies, this batch did not vary the parameters; it instead measured how much outcome variation remains when the model is held fixed.
+
+The aggregate results are summarized in Table~\ref{tab:large_replication_study}. The confidence interval on objective progress is narrow relative to the observed standard deviation because the sample size is large. The final objective controller also splits almost evenly between the two teams, suggesting that the default configuration is not trivially biased toward one side.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lrr}
+    \toprule
+    \textbf{Metric} & \textbf{Value} & \textbf{95\% CI / Share} \\
+    \midrule
+    Mean objective progress & 0.7930 & [0.7910, 0.7949] \\
+    Objective progress standard deviation & 0.3168 & -- \\
+    Final objective controller = 0 & 51,697 runs & 51.7\% \\
+    Final objective controller = 1 & 48,303 runs & 48.3\% \\
+    \bottomrule
+  \end{tabular}
+  \caption{Aggregate results from the 100,000-run replication study of the baseline configuration.}
+  \label{tab:large_replication_study}
+\end{table}
 
 \section{Discussion}
 
 \subsection{Map Design Insights}
 
-The sensitivity analysis reveals that environmental geometry (walls) is the dominant influence on objective capture progress. Maps with moderate wall density (around 0.1--0.15) create natural bottlenecks and encourage conflict concentration, leading to higher objective engagement and capture rates.
+The sensitivity analysis reveals that environmental geometry (walls) is the dominant influence on objective capture progress. Maps with moderate wall density (around 0.1--0.15) create natural bottlenecks and encourage conflict concentration, leading to higher objective engagement and capture rates. This result is useful because it suggests that level design can be just as important as unit balance when shaping whether a match feels like an objective game or a roaming deathmatch.
 
-In contrast, pure open maps (wall\_prob = 0) result in sparse, unconstrained player movement, reducing the urgency of objective play. Conversely, extremely dense walls may fragment the player base into isolated regions.
+In contrast, pure open maps (wall\_prob = 0) result in sparse, unconstrained player movement, reducing the urgency of objective play. Conversely, extremely dense walls may fragment the player base into isolated regions, which can reduce meaningful contesting if teams cannot reach the same spaces reliably.
 
 \subsection{Weapon Balance Implications}
 
-Faster weapons (lower cooldown) paradoxically reduce objective progress, suggesting that high fire rates decouple team coordination from individual success. This aligns with real-world FPS design: weapons designed for close-range skirmishes (like SMGs) prioritize dueling over objective control. Future tuning might link weapon choice to agent role (objective defenders use precise, slower weapons; flankers use aggressive fast-fire weapons).
+Faster weapons (lower cooldown) paradoxically reduce objective progress, suggesting that high fire rates decouple team coordination from individual success. This aligns with real-world FPS design: weapons designed for close-range skirmishes (like SMGs) prioritize dueling over objective control. Future tuning might link weapon choice to agent role more explicitly, for example by making objective defenders use precise, slower weapons while flankers use aggressive fast-fire weapons.
 
 \subsection{Adaptation and Learning}
 
-The slight negative effect of adaptation rate on objective progress suggests that in-match learning to increase aggression is counterproductive for team success. Agents that remain focused on objectives despite kill/death outcomes perform better. This implies that game design should reward objective play equally to or more than individual kills.
+The slight negative effect of adaptation rate on objective progress suggests that in-match learning to increase aggression is counterproductive for team success. Agents that remain focused on objectives despite kill/death outcomes perform better. This implies that game design should reward objective play equally to or more than individual kills, or otherwise agents will optimize the wrong local objective.
+
+\subsection{Baseline Stability}
+
+The large replication study provides a useful sanity check for the model's default behavior. Even with 100,000 distinct random seeds, the final objective-progress estimate stays tightly centered near 0.793, and the final controller split remains close to 50/50. That result matters because it shows the model is stochastic enough to support sensitivity analysis, but not so noisy that aggregate conclusions become unstable.
 
 \subsection{Limitations and Future Work}
 
@@ -226,13 +389,17 @@ The slight negative effect of adaptation rate on objective progress suggests tha
   \item Validation against real FPS data is not yet performed; empirical calibration would strengthen claims about balance.
 \end{itemize}
 
+These limitations are acceptable for a first-pass systems model because the goal is explanatory insight rather than photorealistic simulation. Still, each limitation points to a clear next step if the model is extended into a more predictive tool.
+
 \section{Reproducibility}
 
 All experiments and intermediate outputs are saved in the \texttt{out/} directory:
 \begin{itemize}
   \item \texttt{out/samples/}: Per-sample traces (JSON) and metrics (CSV).
   \item \texttt{out/experiments/}: Aggregate summary CSVs (LHS summary, parameter sweeps).
-  \item \texttt{out/analysis/}: Plots (LHS marginals, Sobol indices) and sensitivity results (JSON).
+  \item \texttt{out/experiments/large\_replication\_study/}: 100,000-run baseline replication outputs and confidence-interval summaries.
+  \item \texttt{out/analysis/}: Plot tables (CSV), sensitivity results (JSON), extracted GIF frames, and derived analysis outputs.
+  \item \texttt{out/videos/}: Animated GIFs generated from simulation runs.
 \end{itemize}
 
 To reproduce the analysis:
@@ -240,14 +407,15 @@ To reproduce the analysis:
 cd fps-pvp-dynamics
 source .venv/bin/activate
 python3 scripts/experiments_pipeline.py
+python3 scripts/run_large_replication_study.py --samples 100000
 \end{lstlisting}
 
-The pipeline is parameterized; the sample sizes and base\_N can be modified in the main() function.
+The pipeline is parameterized; the sample sizes and base\_N can be modified in the main() function, and the replication study sample count can be changed with the \texttt{--samples} flag.
 
 \section{Conclusion}
 
-This report demonstrated the application of agent-based modeling and variance-based sensitivity analysis to understand FPS PvP dynamics. Through 256 LHS samples and 1152 Saltelli samples for Sobol analysis, we identified map geometry (wall density) as the dominant influence on objective capture progress, with weapon cooldown and adaptation mechanics as secondary effects.
+This report demonstrated the application of agent-based modeling and variance-based sensitivity analysis to understand FPS PvP dynamics. Through 256 LHS samples and 1152 Saltelli samples for Sobol analysis, we identified map geometry (wall density) as the dominant influence on objective capture progress, with weapon cooldown and adaptation mechanics as secondary effects. A separate 100,000-run replication study showed that the baseline configuration is stable under repeated sampling, with mean objective progress near 0.793 and a nearly even final controller split.
 
-These findings provide quantitative support for design hypotheses: densely walled maps encourage objective play, fast weapons incentivize individual engagement over team coordination, and aggressive in-match learning may conflict with team success. Future work will extend the model with reinforcement learning agents, continuous space, and empirical calibration against real game data.
+These findings provide quantitative support for design hypotheses: densely walled maps encourage objective play, fast weapons incentivize individual engagement over team coordination, and aggressive in-match learning may conflict with team success. The replication results add a second layer of evidence by showing that the baseline outcome is reproducible at scale rather than being a one-off artifact of a particular seed. Future work will extend the model with reinforcement learning agents, continuous space, richer interaction metrics, and empirical calibration against real game data.
 
 \end{document}
