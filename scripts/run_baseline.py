@@ -17,6 +17,11 @@ def main() -> None:
     for key, value in summary.items():
         print(f"  {key}: {value}")
 
+    # Export trace for visualization
+    out = Path(ROOT) / "trace.json"
+    model.export_trace_json(str(out))
+    print(f"Trace exported to: {out}")
+
 
 if __name__ == "__main__":
     main()

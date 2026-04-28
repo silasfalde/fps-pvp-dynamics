@@ -16,6 +16,7 @@ class PlayerAgent:
     skill: float
     aggression: float
     risk_tolerance: float
+    facing: Coord = (0, 1)
     health: float = 100.0
     alive: bool = True
     respawn_timer: int = 0
@@ -52,3 +53,4 @@ class PlayerAgent:
         self.health = 100.0
         self.alive = True
         self.cooldown_timer = 0
+        self.facing = (0, 1)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import random
 from typing import Dict, List, Tuple
 
@@ -33,6 +34,8 @@ class FpsPvpModel:
 
         self.agents = self._init_agents()
         self.metrics = MetricStore()
+        # In-memory per-tick trace (list of frames)
+        self.trace: List[Dict] = []
 
     def _init_map(self) -> None:
         # Sparse random walls as a placeholder for map templates.
@@ -101,12 +104,22 @@ class FpsPvpModel:
         if not candidates:
             return
 
+        old_pos = agent.pos
         if push:
             candidates.sort(key=lambda p: abs(p[0] - self.objective_pos[0]) + abs(p[1] - self.objective_pos[1]))
-            agent.pos = candidates[0]
-            return
+            new_pos = candidates[0]
+            agent.pos = new_pos
+        else:
+            new_pos = self.rng.choice(candidates)
+            agent.pos = new_pos
 
-        agent.pos = self.rng.choice(candidates)
+        # Update facing as simple grid delta (new - old)
+        dx = agent.pos[0] - old_pos[0]
+        dy = agent.pos[1] - old_pos[1]
+        if dx == 0 and dy == 0:
+            # keep existing facing
+            return
+        agent.facing = (dx, dy)
 
     def _resolve_combat(self) -> None:
         for attacker in self.agents:
@@ -186,3 +199,22 @@ class FpsPvpModel:
                 objective_progress=obj.objective_progress,
             )
         )
+        # Append compact trace frame for visualization/export
+        frame = {
+            "tick": self.tick,
+            "agents": [
+                {
+                    "id": a.agent_id,
+                    "team": a.team_id,
+                    "pos": a.pos,
+                    "facing": a.facing,
+                    "alive": a.alive,
+                }
+                for a in self.agents
+            ],
+        }
+        self.trace.append(frame)
+
+    def export_trace_json(self, path: str) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.trace, f)
