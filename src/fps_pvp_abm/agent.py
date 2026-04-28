@@ -13,6 +13,7 @@ class PlayerAgent:
     agent_id: int
     team_id: int
     pos: Coord
+    weapon_name: str
     skill: float
     aggression: float
     risk_tolerance: float
@@ -23,6 +24,10 @@ class PlayerAgent:
     cooldown_timer: int = 0
     kills: int = 0
     deaths: int = 0
+    # behavioral bookkeeping
+    last_shot_tick: int = -999
+    last_death_tick: int = -999
+    in_cover: bool = False
 
     def tick_timers(self) -> None:
         if self.cooldown_timer > 0:
@@ -37,10 +42,12 @@ class PlayerAgent:
                 return True
         return False
 
-    def decide_action(self, has_visible_enemy: bool, on_objective: bool) -> Action:
+    def decide_action(self, has_visible_enemy: bool, on_objective: bool, in_cover: bool) -> Action:
         if not self.alive:
             return Action.HOLD_DEFEND
         if has_visible_enemy and self.cooldown_timer == 0:
+            if not in_cover and self.risk_tolerance < 0.6:
+                return Action.RETREAT
             return Action.ENGAGE
         if on_objective:
             return Action.HOLD_DEFEND
@@ -54,3 +61,6 @@ class PlayerAgent:
         self.alive = True
         self.cooldown_timer = 0
         self.facing = (0, 1)
+        self.last_shot_tick = -999
+        self.last_death_tick = -999
+        self.in_cover = False

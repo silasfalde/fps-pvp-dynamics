@@ -1,0 +1,10 @@
+parameter,value,ticks,objective_progress,objective_controller
+objective_radius,5,160.0,0.2999999999999992,1.0
+objective_radius,7,160.0,0.8000000000000002,1.0
+objective_radius,9,160.0,0.0,1.0
+wall_prob,0.03,160.0,0.0,1.0
+wall_prob,0.07,160.0,1.0,1.0
+wall_prob,0.15,160.0,0.6799999999999997,0.0
+weapon_cooldown_ticks,1,160.0,1.0,0.0
+weapon_cooldown_ticks,2,160.0,1.0,1.0
+weapon_cooldown_ticks,3,160.0,0.96,1.0

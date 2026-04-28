@@ -22,6 +22,10 @@ def main() -> None:
     model.export_trace_json(str(out))
     print(f"Trace exported to: {out}")
 
+    metrics_csv = Path(ROOT) / "metrics.csv"
+    model.metrics.export_csv(metrics_csv)
+    print(f"Metrics exported to: {metrics_csv}")
+
 
 if __name__ == "__main__":
     main()

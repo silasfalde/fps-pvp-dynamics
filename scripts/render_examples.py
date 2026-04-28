@@ -30,6 +30,14 @@ TEAM_COLORS = {
     1: (214, 39, 40),
 }
 
+TERRAIN_COLORS = {
+    "wall": (70, 70, 74),
+    "cover": (149, 167, 95),
+    "choke": (203, 164, 108),
+    "spawn": (203, 209, 222),
+    "objective": (184, 220, 245),
+}
+
 
 def normalize(vx: float, vy: float) -> tuple[float, float]:
     magnitude = math.hypot(vx, vy)
@@ -47,9 +55,30 @@ def world_to_canvas(x: float, y: float, width: int, height: int) -> tuple[float,
     return canvas_x, canvas_y
 
 
-def draw_frame(frame: dict, width: int, height: int) -> Image.Image:
+def grid_scale(width: int, height: int) -> float:
+    scale_x = (CANVAS_W - 2 * PADDING) / max(width - 1, 1)
+    scale_y = (CANVAS_H - 2 * PADDING) / max(height - 1, 1)
+    return min(scale_x, scale_y)
+
+
+def cell_rect(x: int, y: int, width: int, height: int) -> tuple[float, float, float, float]:
+    scale = grid_scale(width, height)
+    cx, cy = world_to_canvas(float(x), float(y), width, height)
+    half = scale / 2.0
+    return (cx - half, cy - half, cx + half, cy + half)
+
+
+def draw_frame(frame: dict, width: int, height: int, terrain_map: list[list[str]]) -> Image.Image:
     image = Image.new("RGB", (CANVAS_W, CANVAS_H), (246, 244, 240))
     draw = ImageDraw.Draw(image)
+
+    for x in range(width):
+        for y in range(height):
+            terrain = terrain_map[x][y]
+            fill = TERRAIN_COLORS.get(terrain)
+            if fill is None:
+                continue
+            draw.rectangle(cell_rect(x, y, width, height), fill=fill)
 
     # Grid and axes
     for gx in range(width):
@@ -101,28 +130,99 @@ def save_gif(frames: list[Image.Image], outpath: Path, duration_ms: int = 90) ->
     )
 
 
-def run_and_render(seed: int, idx: int) -> None:
-    config = SimulationConfig(max_ticks=200, n_agents=30, seed=seed)
+def run_and_render(seed: int, idx: int, wall_prob: float | None = None) -> None:
+    cfg_kwargs = {"max_ticks": 200, "n_agents": 30, "seed": seed}
+    if wall_prob is not None:
+        cfg_kwargs["wall_prob"] = wall_prob
+    config = SimulationConfig(**cfg_kwargs)
     model = FpsPvpModel(config)
     print(f"Running match {idx} (seed={seed})...")
     model.run()
     trace = model.trace
+    terrain_map = [[cell.terrain.value for cell in col] for col in model.env.grid]
 
     trace_path = OUT_DIR / f"trace_{idx}.json"
     with open(trace_path, "w", encoding="utf-8") as f:
         json.dump(trace, f)
     print(f"Saved trace to {trace_path}")
 
-    frames = [draw_frame(frame, config.width, config.height) for frame in trace]
+    # build frames while tracking persistent death markers
+    death_markers: list[dict] = []  # each: {pos:(x,y), ttl:int, color:(r,g,b)}
+    shot_markers: list[dict] = []  # each: {pos:(x,y), ttl:int, color:(r,g,b)}
+    frames_images = []
+    # objective position in world coords
+    obj_pos = (config.width // 2, config.height // 2)
+    for fr in trace:
+        # build agent id -> team map for this frame
+        id2team = {a['id']: a['team'] for a in fr.get('agents', [])}
+
+        # collect events
+        for ev in fr.get("events", []):
+            if ev.get("type") == "death":
+                aid = ev.get("agent")
+                team = id2team.get(aid, 0)
+                color = TEAM_COLORS.get(team, (0, 0, 0))
+                death_markers.append({"pos": tuple(ev.get("pos")), "ttl": config.death_marker_duration, "color": color})
+            if ev.get("type") == "shot":
+                attacker = ev.get("attacker")
+                team = id2team.get(attacker, 0)
+                # flash at attacker position; green for hit, red for miss but muted
+                if ev.get("hit"):
+                    color = (255, 220, 50)
+                else:
+                    color = (200, 100, 100)
+                shot_markers.append({"pos": tuple(ev.get("from")), "ttl": config.shot_flash_duration, "color": color})
+
+        # decrement TTL and filter death markers
+        for m in list(death_markers):
+            if m["ttl"] <= 0:
+                death_markers.remove(m)
+        # decrement TTL and filter shots
+        for s in list(shot_markers):
+            if s["ttl"] <= 0:
+                shot_markers.remove(s)
+
+        # draw frame with markers
+        img = draw_frame(fr, config.width, config.height, terrain_map)
+        draw = ImageDraw.Draw(img)
+
+        # draw objective boundary
+        ox, oy = obj_pos
+        ocx, ocy = world_to_canvas(ox + 0.5, oy + 0.5, config.width, config.height)
+        radius = grid_scale(config.width, config.height) * 5.5
+        draw.ellipse((ocx - radius, ocy - radius, ocx + radius, ocy + radius), outline=(80, 80, 200), width=3)
+
+        # draw persistent X markers (team-colored)
+        for m in death_markers:
+            cx, cy = world_to_canvas(m["pos"][0], m["pos"][1], config.width, config.height)
+            size = 12
+            draw.line((cx - size, cy - size, cx + size, cy + size), fill=m.get('color', (0, 0, 0)), width=3)
+            draw.line((cx - size, cy + size, cx + size, cy - size), fill=m.get('color', (0, 0, 0)), width=3)
+            m["ttl"] -= 1
+
+        # draw muzzle/shot flashes
+        for s in shot_markers:
+            sx, sy = world_to_canvas(s["pos"][0], s["pos"][1], config.width, config.height)
+            r = 6 + s["ttl"] * 2
+            draw.ellipse((sx - r, sy - r, sx + r, sy + r), fill=s.get('color', (255, 220, 50)))
+            s["ttl"] -= 1
+
+        frames_images.append(img)
+
     outpath = OUT_DIR / f"match_{idx}.gif"
-    save_gif(frames, outpath)
+    save_gif(frames_images, outpath)
     print(f"Saved animation to {outpath}")
 
 
 def main() -> None:
+    # baseline runs
     seeds = [531, 532, 533]
     for idx, seed in enumerate(seeds, start=1):
         run_and_render(seed, idx)
+
+    # obstacle-heavy runs
+    run_and_render(600, 4, wall_prob=0.18)
+    run_and_render(601, 5, wall_prob=0.25)
 
 
 if __name__ == "__main__":
