@@ -40,7 +40,7 @@
 
 \title{FPS PvP Dynamics: Agent-Based Modeling and Sensitivity Analysis}
 \class{CMPLXSYS 531}
-\author{Automated Report}
+\author{Silas Falde}
 \date{\today}
 
 \begin{document}
@@ -58,13 +58,18 @@ A separate 100,000-run replication study of the baseline configuration provides 
 
 FPS PvP game balance emerges from the complex interactions of individual player decisions, map constraints, and rule-based systems. An agent-based approach is appropriate for exploring this emergence because macro-level patterns such as fairness, engagement frequency, objective control, and dominant strategies arise from many local decisions rather than from any explicit aggregate rule.
 
+Several prior studies have applied agent-based models to study collective behavior, spatial interactions, and strategic decision-making in socio-technical systems (e.g., generative social science and methodological reviews of ABM). This project builds on that methodological tradition by combining a compact, interpretable rule-based agent design with variance-based sensitivity analysis to identify drivers of macroscopic outcomes. The use of standardized description frameworks (ODD/PARTE) and clear experimental pipelines helps make the model and analyses reproducible and comparable to prior ABM work.
+
 The primary goal of this project is to model these dynamics and use parameter sweeps and sensitivity analysis to identify which game design elements most strongly influence gameplay outcomes. In practice, this means asking questions such as how much of the match outcome is driven by map layout rather than weapon tuning, or whether local learning helps teams capture objectives or distracts them from the objective entirely. This kind of analysis can inform balance decisions and help developers predict the effects of tuning changes before implementing them in live games.
 
 \section{Model Description and Design}
 
+% Follow ODD/PARTE guidance
+This section follows the spirit of standard ABM description frameworks (ODD: Overview, Design concepts, Details; PARTE: Purpose, Agents, Rules, Time, Experiment) so that a reader could reimplement the model from the description below.
+
 \subsection{Core Concepts}
 
-The model implements six key design concepts from the proposal:
+The model implements six key design concepts that drive the emergent dynamics of FPS PvP matches:
 
 \begin{description}
   \item[Emergence:] Team-level fairness and engagement patterns emerge from heterogeneous agent decisions about positioning, weapon selection, and engagement timing. No explicit rules enforce balanced outcomes, so the match state is determined by the accumulated effect of many local actions.
@@ -340,6 +345,17 @@ python3 scripts/run_large_replication_study.py --samples 100000
 \end{lstlisting}
 
 The pipeline is parameterized; the sample sizes and base\_N can be modified in the main() function, and the replication study sample count can be changed with the \texttt{--samples} flag.
+
+Environment and package versions
+\begin{itemize}
+  \item \textbf{Recommended Python:} Python 3.11 (any 3.10+ interpreter should work).
+  \item \textbf{Dependencies:} See \texttt{requirements.txt} for exact package requirements; install with \texttt{pip install -r requirements.txt}.
+  \item \textbf{Tests:} Unit tests are provided in the \texttt{tests\/} directory. Run them with \texttt{pytest\ tests\/test\_model.py} after activating the virtual environment.
+  \item \textbf{Code quality:} The model code includes docstrings and inline documentation in \texttt{src\/fps\_pvp\_abm\/}. See README in the repository root for additional developer notes.
+\end{itemize}
+
+Notes: the analysis pipeline was developed against Python 3.11 and the packages listed in \texttt{requirements.txt} (e.g., \texttt{mesa}, \texttt{numpy}, \texttt{pandas}, \texttt{matplotlib}, \texttt{SALib}). 
+
 
 \section{Conclusion}
 
