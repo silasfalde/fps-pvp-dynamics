@@ -165,7 +165,7 @@ If the random shot lands, damage is applied: $\text{dmg} = d_{\text{base}} (1 + 
 
 \subsection{Parameter Space}
 
-We swept seven parameters over their ranges:
+Seven parameters were swept over their ranges:
 \begin{center}
 \begin{tabular}{lcc}
   \toprule
@@ -185,7 +185,7 @@ We swept seven parameters over their ranges:
 \subsection{Sampling Strategy}
 
 \subsubsection{Latin Hypercube Sampling}
-We used Latin Hypercube Sampling (LHS) to generate 1024 parameter combinations uniformly covering the 7-dimensional parameter space. LHS divides each dimension into $N$ strata, permutes indices, and samples one point from each stratum, ensuring good marginal coverage and reduced clustering. This matters because the model is nonlinear: if the sample cloud were too clustered, the experiment could miss important regions of the parameter space and the summary statistics would become unstable.
+Latin Hypercube Sampling (LHS) was used to generate 1024 parameter combinations uniformly covering the 7-dimensional parameter space. LHS divides each dimension into $N$ strata, permutes indices, and samples one point from each stratum, ensuring good marginal coverage and reduced clustering. This matters because the model is nonlinear: if the sample cloud was too clustered, the experiment could miss important regions of the parameter space and the summary statistics would become unstable.
 
 All 1024 samples were executed in parallel using multiprocessing (one sample per CPU core), with each run saving:
 \begin{itemize}
@@ -194,22 +194,22 @@ All 1024 samples were executed in parallel using multiprocessing (one sample per
   \item Summary JSON with final objective progress, objective controller, and all parameter values.
 \end{itemize}
 
-The marginal distributions are plotted separately for the first three sampled parameters because their scales are not comparable on a shared histogram. Separating them makes it much easier to inspect whether the stratification is actually uniform across each dimension. The report renders the histograms directly from the raw LHS sample table using pgfplots, which lets LaTeX handle the binning, spacing, and typography instead of relying on pre-rendered images.
+The marginal distributions are plotted separately for the first three sampled parameters because their scales are not comparable on a shared histogram. Separating them makes it much easier to inspect whether the stratification is actually uniform across each dimension.
 
 \subsubsection{Saltelli Sobol Sampling}
-For variance-based sensitivity analysis, we used Saltelli's sampling scheme (implemented in SALib) with base sample size $N = 128$. This generates $(2K + 2) \times N = (2 \times 7 + 2) \times 128 = 2048$ model runs to compute first-order and total Sobol indices. Saltelli sampling provides balanced samples for estimating both $S_1$ (first-order effect) and $S_T$ (total effect including interactions), which is important because the model contains several interacting mechanisms rather than a single linear cause-and-effect chain.
+For variance-based sensitivity analysis, Saltelli's sampling scheme (implemented in SALib) was used with base sample size $N = 128$. This generates $(2K + 2) \times N = (2 \times 7 + 2) \times 128 = 2048$ model runs to compute first-order and total Sobol indices. Saltelli sampling provides balanced samples for estimating both $S_1$ (first-order effect) and $S_T$ (total effect including interactions), which is important because the model contains several interacting mechanisms rather than a single linear cause-and-effect chain.
 
 \subsection{Output Metric}
 
-The primary output was \textbf{objective progress} at the end of each 200-tick match. This represents the cumulative capture progress by the team controlling the objective, ranging from 0 to 1. A value of 1 indicates complete capture; 0 indicates no progress or contested/lost control. We focus on this metric because it directly measures whether the model is producing coordinated team play rather than just isolated combat.
+The primary output was \textbf{objective progress} at the end of each 200-tick match. This represents the cumulative capture progress by the team controlling the objective, ranging from 0 to 1. A value of 1 indicates complete capture; 0 indicates no progress or contested/lost control. This study focuses on this metric because it directly measures whether the model is producing coordinated team play rather than just isolated combat.
 
 \section{Results}
 
 \subsection{LHS Exploration}
 
-To verify that the Latin Hypercube Sampling (LHS) covered the parameter space uniformly, we computed the Kolmogorov-Smirnov (KS) statistic for each of the seven swept parameters. The KS test measures how closely the marginal distribution of each parameter matches a uniform distribution; values near 0 indicate excellent uniformity, while larger values indicate systematic bias. Across all 1024 samples, the maximum KS statistic observed was 0.00098 (well below the conventional critical threshold of 0.037 for $n=1024$ at significance level $\alpha=0.05$), with all parameters yielding KS p-values of 1.0, confirming that LHS achieved its intended goal: stratified coverage without clustering or gaps.
+To verify that the Latin Hypercube Sampling (LHS) covered the parameter space uniformly, the Kolmogorov-Smirnov (KS) statistic was computed for each of the seven swept parameters. The KS test measures how closely the marginal distribution of each parameter matches a uniform distribution; values near 0 indicate excellent uniformity, while larger values indicate systematic bias. Across all 1024 samples, the maximum KS statistic observed was 0.00098 (well below the conventional critical threshold of 0.037 for $n=1024$ at significance level $\alpha=0.05$), with all parameters yielding KS p-values of 1.0, confirming that LHS achieved its intended goal: stratified coverage without clustering or gaps.
 
-This validation is important because the model is highly nonlinear. If the sample cloud were too clustered, the experiment could miss important regions of the parameter space and the summary statistics would become unstable. By verifying near-perfect uniformity, we ensure that downstream sensitivity analysis (e.g., Sobol indices) is not biased by poor sampling coverage.
+This validation is important because the model is highly nonlinear. If the sample cloud was too clustered, the experiment could miss important regions of the parameter space and the summary statistics would become unstable. Verification of near-perfect uniformity ensures that downstream sensitivity analysis (e.g., Sobol indices) is not biased by poor sampling coverage.
 
 Summary statistics from the 1024 LHS runs:
 \begin{itemize}
@@ -268,7 +268,7 @@ Figure~\ref{fig:sobol_s1} displays the first-order Sobol indices ($S_1$), which 
 
 \subsection{Large Replication Study}
 
-To check how stable the baseline configuration is under repeated random seeds, we ran 100,000 independent matches with the default 200-tick setup and distinct seeds. Unlike the LHS and Sobol studies, this batch did not vary the parameters; it instead measured how much outcome variation remains when the model is held fixed.
+To check baseline stability under repeated random seeds, 100,000 independent matches were run with the default 200-tick setup and distinct seeds. Unlike the LHS and Sobol studies, this batch did not vary the parameters; it instead measured how much outcome variation remains when the model is held fixed.
 
 The aggregate results are summarized in Table~\ref{tab:large_replication_study}. The confidence interval on objective progress is narrow relative to the observed standard deviation because the sample size is large. The final objective controller also splits almost evenly between the two teams, suggesting that the default configuration is not trivially biased toward one side.
 
@@ -322,7 +322,7 @@ These limitations are acceptable for a first-pass systems model because the goal
 
 \section{Reproducibility}
 
-All experiments and intermediate outputs are saved in the \texttt{out/} directory:
+All experiments and intermediate outputs are saved in the \texttt{out/} directory of the repository found at \url{https://github.com/silasfalde/fps-pvp-dynamics}:
 \begin{itemize}
   \item \texttt{out/samples/}: Per-sample traces (JSON) and metrics (CSV).
   \item \texttt{out/experiments/}: Aggregate summary CSVs (LHS summary, parameter sweeps).
@@ -343,8 +343,8 @@ The pipeline is parameterized; the sample sizes and base\_N can be modified in t
 
 \section{Conclusion}
 
-This report demonstrated the application of agent-based modeling and variance-based sensitivity analysis to understand FPS PvP dynamics. Through 1024 LHS samples and 2048 Saltelli samples for Sobol analysis, we identified map geometry—specifically wall density, choke probability, and objective radius—as the dominant influences on objective capture progress. A separate 100,000-run replication study showed that the baseline configuration is stable under repeated sampling, with mean objective progress near 0.793 and a nearly even final controller split.
+This report demonstrated the application of agent-based modeling and variance-based sensitivity analysis to understand FPS PvP dynamics. Through 1024 LHS samples and 2048 Saltelli samples for Sobol analysis, the study identified map geometry—specifically wall density, choke probability, and objective radius—as the dominant influences on objective capture progress. A separate 100,000-run replication study showed that the baseline configuration is stable under repeated sampling, with mean objective progress near 0.793 and a nearly even final controller split.
 
-These findings provide quantitative support for design hypotheses: densely walled maps with natural chokepoints encourage objective play, larger objective zones facilitate capture, and measured weapon pacing supports team coordination better than rapid fire rates. Adaptation and learning mechanics show modest positive effects, suggesting that dynamic strategic adjustment helps teams succeed. The replication results add a second layer of evidence by showing that the baseline outcome is reproducible at scale rather than being a one-off artifact of a particular seed. Future work will extend the model with reinforcement learning agents, continuous space, richer interaction metrics, and empirical calibration against real game data.
+These findings provide quantitative support for design hypotheses: densely walled maps with natural chokepoints encourage objective play, larger objective zones facilitate capture, and measured weapon pacing supports team coordination better than rapid fire rates. Adaptation and learning mechanics show modest positive effects, suggesting that dynamic strategic adjustment helps teams succeed. The replication results add a second layer of evidence by showing that the baseline outcome is reproducible at scale rather than being a one-off artifact of a particular seed. Future work could extend the model with reinforcement learning agents, continuous space, richer interaction metrics, and empirical calibration against real game data.
 
 \end{document}
